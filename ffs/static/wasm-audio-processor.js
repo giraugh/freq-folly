@@ -2,11 +2,19 @@ class WasmAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.wasm = undefined;
+        this.sampleRate = undefined;
         this._samplesView;
         this._freqView;
 
         // Listen for WASM location and import it here
         this.port.onmessage = async (e) => {
+            if (e.data.type === "sampleRate") {
+                this.sampleRate = e.data.rate;
+                if (this.wasm) {
+                    this.wasm.exports.set_sample_rate(this.sampleRate);
+                }
+            }
+
             if (e.data.type === "wasm") {
                 // Instantiate the module
                 this.wasm = await WebAssembly.instantiate(e.data.module, {
@@ -18,6 +26,11 @@ class WasmAudioProcessor extends AudioWorkletProcessor {
                 // Then initialise our buffer views
                 this._samplesView = this.createSampleInBufferView();
                 this._freqView = this.createFreqOutBufferView();
+
+                // And set the sample rate (if we have it)
+                if (this.sampleRate !== undefined) {
+                    this.wasm.exports.set_sample_rate(this.sampleRate);
+                }
             }
         };
     }

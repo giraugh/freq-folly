@@ -12,5 +12,6 @@ crate-type = ["cdylib", "rlib"]
 opt-level = "s"
 
 [dependencies]
+itertools = "0.14.0"
 phastft = { git = "https://github.com/QuState/PhastFT", branch = "main", version = "0.3.0" }
 ringbuffer = "0.16.0"

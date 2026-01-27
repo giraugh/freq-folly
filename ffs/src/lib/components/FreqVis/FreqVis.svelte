@@ -17,16 +17,15 @@
         //    Our graph is just source->wasm-node w/ no outputs
         const source = ctx.createMediaStreamSource(device);
         const node = new AudioWorkletNode(ctx, "wasm-audio-processor");
+        node.port.postMessage({ type: "sampleRate", rate: ctx.sampleRate });
         source.connect(node);
 
         // We compile the WASM here but do not instantiate
         const wasmBytes = await (await fetch("/ffaa.wasm")).arrayBuffer();
         const wasmModule = await WebAssembly.compile(wasmBytes);
-        node.port.postMessage({
-            type: "wasm",
-            module: wasmModule,
-        });
+        node.port.postMessage({ type: "wasm", module: wasmModule });
 
+        // Listen for frequency spectrum updates
         node.port.onmessage = (e) => {
             freqs = e.data.freqs;
         };
@@ -39,14 +38,14 @@
 
 <div class="freqs">
     {#each freqs as freq, i (i)}
-        <div style:height={`${5 + freq * 20}px`}></div>
+        <div style:height={`${5 + freq * 100}px`}></div>
     {/each}
 </div>
 
 <style>
     .freqs {
         display: grid;
-        grid-template-columns: repeat(128, 1fr);
+        grid-template-columns: repeat(30, 1fr);
         gap: 0px;
         flex-direction: row;
         align-items: end;
