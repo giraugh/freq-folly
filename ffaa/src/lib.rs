@@ -1,4 +1,4 @@
-use std::{f32::consts::TAU, iter, sync::LazyLock};
+use std::{cell::RefCell, f32::consts::TAU, iter, sync::LazyLock};
 
 use phastft::{
     fft_32_with_opts_and_plan,
@@ -13,19 +13,9 @@ mod utils;
 /// this is locked at 128 as per the current browser audio APIs
 const BLOCK_SIZE: usize = 128;
 
-/// Buffer for javascript to send us samples
-static mut SAMPLE_IN_BUFF: [f32; BLOCK_SIZE] = [0.0; BLOCK_SIZE];
-
 /// Our FT is computed across this many samples
 /// *effectively* controls what the time-range is for the FT
 const SAMPLES_SIZE: usize = 256;
-
-/// Ring buffer for DSP
-static mut SAMPLES: ConstGenericRingBuffer<f32, SAMPLES_SIZE> =
-    ConstGenericRingBuffer::<f32, SAMPLES_SIZE>::new();
-
-/// A buffer for getting our FT output back out to javascript
-static mut FREQ_OUT_BUFF: [f32; SAMPLES_SIZE / 2] = [0.0; SAMPLES_SIZE / 2];
 
 /// Setup an FFT planner (as we always ues the same size)
 static FFT_PLANNER: LazyLock<Planner32> =
@@ -35,59 +25,58 @@ static FFT_PLANNER: LazyLock<Planner32> =
 /// so just setup that up ahead of time
 static FFT_IMAGS: [f32; SAMPLES_SIZE] = [0.0; SAMPLES_SIZE];
 
+// Shared buffers
+thread_local! {
+    /// Buffer for javascript to send us samples
+    pub static SAMPLE_IN_BUFF: RefCell<[f32; BLOCK_SIZE]> = const { RefCell::new([0.0; BLOCK_SIZE]) };
+
+    /// A buffer for getting our FT output back out to javascript
+    pub static FREQ_OUT_BUFF: RefCell<[f32; SAMPLES_SIZE / 2]> = const { RefCell::new([0.0; SAMPLES_SIZE / 2]) };
+
+    /// Ring buffer for DSP
+    pub static SAMPLES: RefCell<ConstGenericRingBuffer<f32, SAMPLES_SIZE>> = const { RefCell::new(ConstGenericRingBuffer::<f32, SAMPLES_SIZE>::new()) };
+}
+
 #[no_mangle]
 pub extern "C" fn sample_in_ptr() -> *mut f32 {
-    unsafe { SAMPLE_IN_BUFF.as_mut_ptr() }
+    SAMPLE_IN_BUFF.with_borrow_mut(|b| b.as_mut_ptr())
 }
 
 #[no_mangle]
 pub extern "C" fn freq_out_ptr() -> *mut f32 {
-    unsafe { FREQ_OUT_BUFF.as_mut_ptr() }
+    FREQ_OUT_BUFF.with_borrow_mut(|b| b.as_mut_ptr())
 }
 
 #[no_mangle]
 pub extern "C" fn freq_out_len() -> usize {
-    unsafe { FREQ_OUT_BUFF.len() }
-}
-
-// wip
-struct SpectrumConfig {
-    /// How many bins in output spectrum?
-    /// NOTE: is logarithmic
-    spectrum_size: usize,
-
-    /// Minimum frequency in Hz
-    min_freq: f32,
-
-    /// Maximum frequency in Hz
-    max_freq: f32,
+    FREQ_OUT_BUFF.with_borrow(|b| b.len())
 }
 
 // NOTE: we always assume that length is 128
 #[no_mangle]
 pub extern "C" fn process_samples() {
     // copy to ring buffer from array
-    let new_samples = unsafe { &SAMPLE_IN_BUFF[..] };
-    unsafe {
-        SAMPLES.extend(new_samples.iter().cloned());
-    }
+    SAMPLE_IN_BUFF.with_borrow(|new_samples| {
+        SAMPLES.with_borrow_mut(|rb| {
+            rb.extend(new_samples.iter().cloned());
+        })
+    });
 
     // We ONLY start FT once we have enough points
-    if unsafe { SAMPLES.len() } < SAMPLES_SIZE {
+    if SAMPLES.with_borrow(|b| b.len()) < SAMPLES_SIZE {
         return;
     }
 
-    // Then do FT
-    // for now just return the length of the ring
-    // TODO: apply a window function to the reals here (e.g hann)
-    let n = unsafe { SAMPLES.len() as f32 };
-    let mut reals = unsafe {
-        SAMPLES
-            .iter()
+    // Apply a window function to each real value
+    let n = SAMPLES.with_borrow(|b| b.len()) as f32;
+    let mut reals = SAMPLES.with_borrow(|b| {
+        b.iter()
             .enumerate()
             .map(|(i, x)| hann(i, n) * *x)
             .collect::<Vec<_>>()
-    };
+    });
+
+    // Then do FT
     let mut imags = Vec::from(FFT_IMAGS);
     fft_32_with_opts_and_plan(&mut reals, &mut imags, &Options::default(), &FFT_PLANNER);
 
@@ -97,9 +86,11 @@ pub extern "C" fn process_samples() {
     let mags = iter::zip(reals, imags)
         .map(|(a, b)| 2.0 * (a.powi(2) + b.powi(2)).sqrt())
         .take(SAMPLES_SIZE / 2);
-    mags.enumerate().for_each(|(i, v)| unsafe {
-        FREQ_OUT_BUFF[i] = v;
-    });
+    FREQ_OUT_BUFF.with_borrow_mut(|fout| {
+        mags.enumerate().for_each(|(i, v)| {
+            fout[i] = v;
+        });
+    })
 }
 
 fn hann(i: usize, n: f32) -> f32 {
