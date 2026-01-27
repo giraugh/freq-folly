@@ -116,8 +116,7 @@ pub extern "C" fn process_samples() {
             .for_each(|(i, (start_bin, end_bin))| {
                 let sum = &magnitudes[start_bin..end_bin].iter().sum();
                 let energy = sum / (end_bin - start_bin) as f32;
-                //let db = 20.0 * (energy + 1e-6).log10();
-                let out = energy.powf(0.3);
+                let out = energy.powf(0.35); // scale it down a tad to reduce spikiness :relieved:
                 fout[i] = out;
             });
     });

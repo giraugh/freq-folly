@@ -38,7 +38,7 @@
 
 <div class="freqs">
     {#each freqs as freq, i (i)}
-        <div style:height={`${5 + freq * 100}px`}></div>
+        <div style:height={`${5 + freq * 70}px`}></div>
     {/each}
 </div>
 
@@ -52,6 +52,8 @@
         height: calc(100dvh - 20px); /* TEMP */
         width: 100vdw; /* TEMP */
         overflow-y: hidden;
+
+        transition: height 0.1s;
     }
 
     .freqs > * {
