@@ -131,7 +131,7 @@
         gap: 0px;
         flex-direction: row;
         align-items: end;
-        height: calc(100dvh - 20px); /* TEMP */
+        height: calc(100dvh); /* TEMP */
         width: 100vdw; /* TEMP */
         overflow-y: hidden;
 
