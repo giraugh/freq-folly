@@ -24,7 +24,7 @@ const BLOCK_SIZE: usize = 128;
 const SAMPLES_SIZE: usize = 4096;
 
 /// How many bands we want in our output spectrum
-const BANDS_COUNT: usize = 30;
+const BANDS_COUNT: usize = 70;
 
 /// Setup an FFT planner (as we always ues the same size)
 static FFT_PLANNER: LazyLock<Planner32> =
