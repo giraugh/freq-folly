@@ -1,0 +1,16 @@
+[package]
+name = "ffaa"
+version = "0.1.0"
+authors = ["Ewan <ebreakey@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
+
+[dependencies]
+phastft = { git = "https://github.com/QuState/PhastFT", branch = "main", version = "0.3.0" }
+ringbuffer = "0.16.0"
