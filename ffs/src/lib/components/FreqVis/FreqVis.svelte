@@ -1,74 +1,11 @@
 <script lang="ts">
-    let initiated = $state(false);
-
     const GRAVITY = 0.1;
+    const BUOYANT_FORCE = 0.5;
 
-    /** Describe the state of a single ball for now. Its positions are in px space ig */
-    let ball = $state({ x: 200, y: 0, vx: 0, vy: 0, r: 30 });
-    let bars = $state<Array<HTMLElement>>([]);
+    let initiated = $state(false);
+    let spectrum = $state<number[]>([]);
+    let svgEl = $state<SVGElement | undefined>(undefined);
 
-    /*
-
-     TODO: instead of doing what im doing below, construct a curve from the heights and then determine the
-           angle of the curve at the x position of the ball, then if its below the curve apply a force in that direction of the normal
-           of the curve
-
-    */
-
-    function update() {
-        ball.vy += GRAVITY;
-
-        ball.vy *= 0.995;
-
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-
-        for (const bar of bars) {
-            const rect = bar.getBoundingClientRect();
-            const col = circleRectOverlap(ball, rect);
-            if (col) {
-                ball.x += (0.5 * col.xd) / Math.max(1, col.dd);
-                ball.vy -= 0.3;
-            }
-        }
-
-        if (ball.x < 0) {
-            ball.x = 0;
-            ball.vx *= -1;
-        }
-
-        if (ball.y < 0) {
-            ball.y = 0;
-            ball.vy *= -1;
-        }
-    }
-
-    function minSegmentDist(start: number, end: number, point: number) {
-        // Inside segment?
-        if (start <= point && point <= end) {
-            return 0;
-        }
-
-        // Otherwise distance to terminus
-        return point < start ? start - point : point - end;
-    }
-
-    function circleRectOverlap(
-        circle: { x: number; y: number; r: number },
-        rect: DOMRect,
-    ) {
-        const xd = minSegmentDist(rect.left, rect.right, circle.x);
-        const yd = minSegmentDist(rect.top, rect.bottom, circle.y);
-        const dd = Math.sqrt(xd * xd + yd * yd);
-        return dd > circle.r ? null : { xd, yd, dd };
-    }
-
-    function loop() {
-        update();
-        requestAnimationFrame(() => loop());
-    }
-
-    let spectrum = $state([]);
     async function initAudio() {
         initiated = true;
 
@@ -95,13 +32,145 @@
 
         // Listen for frequency spectrum updates
         node.port.onmessage = (e) => {
-            spectrum = e.data.freqs;
+            for (let i = 0; i < e.data.freqs.length; i++) {
+                // Spectral dampening
+                spectrum[i] = lerp(spectrum?.[i] ?? 0, e.data.freqs[i], 0.2);
+
+                // Waviness
+                spectrum[i] +=
+                    Math.sin(
+                        Date.now() / 500 + (30 * i) / e.data.freqs.length,
+                    ) * 0.03;
+            }
         };
+    }
+
+    // How big is the svg?
+    const canvasSize = $derived(svgEl?.getBoundingClientRect());
+    const canvasWidth = 1400; // $derived(canvasSize?.width ?? 0);
+    const canvasHeight = 1200; //$derived(canvasSize?.height ?? 0);
+    const spectrumScale = 70;
+    const waterLine = $derived(canvasHeight * 0.9);
+
+    // Derive line segments from the bar heights
+    const segments = $derived.by(() => {
+        // Apply smoothing to the spectrum
+        const smoothedSpectrum = spectrum.map((v, i) => {
+            const before = i > 0 ? spectrum[i - 1] : v;
+            const after = i < spectrum.length - 1 ? spectrum[i + 1] : v;
+            return (before + v + after) / 3;
+        });
+
+        let segments = [];
+        for (let i = 1; i < spectrum.length; i++) {
+            // Define line segment
+            const prev = smoothedSpectrum[i - 1];
+            const bar = smoothedSpectrum?.[i];
+            const x1 = ((i - 1) / (spectrum.length - 1)) * canvasWidth;
+            const x2 = (i / (spectrum.length - 1)) * canvasWidth;
+            const y1 = waterLine - prev * spectrumScale;
+            const y2 = waterLine - bar * spectrumScale;
+            const xd = x2 - x1;
+            const yd = y2 - y1;
+            const dd = Math.sqrt(xd * xd + yd * yd);
+
+            // normal
+            const oxd = yd;
+            const oyd = -xd; // double check this
+            const nxd = oxd / dd;
+            const nyd = oyd / dd;
+
+            // add segment
+            segments.push({
+                x1,
+                x2,
+                y1,
+                y2,
+                xd,
+                yd,
+                dd,
+                nxd,
+                nyd,
+            });
+        }
+
+        return segments;
+    });
+
+    // Create path data from segments
+    const pathData = $derived.by(() => {
+        if (segments.length === 0) return "";
+        const start = `M${segments[0].x1}, ${segments[0].y1}`;
+        const lineOps = segments.map((s) => `L${s.x2}, ${s.y2}`).join(" ");
+        const returnLine = `L${canvasWidth + 20}, ${segments.at(-1)?.y2} L${canvasWidth + 20}, ${canvasHeight + 20} L${-5}, ${canvasHeight + 20}`;
+        return `${start} ${lineOps} ${returnLine}`;
+    });
+
+    /** Describe the state of a single ball for now. Its positions are in px space ig */
+    let ball = $state({ x: 700, y: -50, vx: 0, vy: 0, r: 30 });
+
+    function loop() {
+        update();
+        requestAnimationFrame(() => loop());
+    }
+
+    function update() {
+        ball.vy += GRAVITY;
+
+        ball.vy *= 0.995;
+        ball.vx *= 0.995;
+
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Bounce of edges
+        if (ball.x < 0) {
+            ball.x = 0;
+            ball.vx *= -1;
+        }
+        if (ball.x > canvasWidth) {
+            ball.x = canvasWidth;
+            ball.vx *= -1;
+        }
+        if (ball.y < 0) {
+            ball.y = 0;
+            ball.vy *= -1;
+        }
+        if (ball.y > canvasHeight) {
+            ball.y = canvasHeight;
+            ball.vy *= -1;
+        }
+
+        // Below water line?
+        // Find a segment that matches our x position
+        const activeSegment = segments.find((s) => {
+            return ball.x >= s.x1 && ball.x <= s.x2;
+        });
+        if (activeSegment) {
+            const s = activeSegment;
+            const t = (ball.x - s.x1) / (s.x2 - s.x1);
+            console.log(t);
+            const surfaceY = lerp(s.y1, s.y2, t);
+            if (ball.y > surfaceY) {
+                // Apply bouyancy
+                ball.vy -= BUOYANT_FORCE;
+                ball.vx += s.nxd * BUOYANT_FORCE;
+
+                // Apply damping
+                //ball.vy *= 0.9;
+                ball.vx *= 0.98;
+            }
+        }
+    }
+
+    function lerp(a: number, b: number, t: number): number {
+        return a + (b - a) * t;
     }
 </script>
 
 {#if !initiated}
     <button
+        class="start"
         onclick={() => {
             initAudio();
             loop();
@@ -111,41 +180,57 @@
     </button>
 {/if}
 
-<div class="freqs">
-    {#each spectrum as height, i (i)}
-        <div style:height={`${5 + height * 70}px`} bind:this={bars[i]}></div>
-    {/each}
-</div>
-
-<div
-    class="ball"
-    style:left={`${ball.x}px`}
-    style:top={`${ball.y}px`}
-    style:width={`${ball.r * 2}px`}
-></div>
+<svg bind:this={svgEl} viewBox="0 0 {canvasWidth} {canvasHeight}">
+    <circle cx={ball.x} cy={ball.y} r={ball.r} fill="coral" stroke="none" />
+    <path
+        d={pathData}
+        stroke="white"
+        fill="#11a7e2"
+        stroke-width="15"
+        stroke-linecap="round"
+    />
+    <circle
+        cx={ball.x}
+        cy={ball.y}
+        r={ball.r}
+        stroke="white"
+        stroke-width="3"
+        fill="none"
+    />
+</svg>
 
 <style>
-    .freqs {
-        display: grid;
-        grid-template-columns: repeat(70, 1fr);
-        gap: 0px;
-        flex-direction: row;
-        align-items: end;
-        height: calc(100dvh); /* TEMP */
-        width: 100vdw; /* TEMP */
-        overflow-y: hidden;
-
-        transition: height 0.1s;
+    :global(body) {
+        background: #031b2f;
     }
 
-    .freqs > * {
-        background: cornflowerblue;
+    .start {
+        position: fixed;
+        inset: 0;
+        width: 150px;
+        height: 80px;
+        font-size: 2rem;
+        margin: auto;
+
+        background: white;
+        border: none;
+        color: #031b2f;
+        font-family: sans-serif;
+        padding: 10px;
+
+        border-radius: 4px;
+        font-weight: bold;
     }
 
-    .ball {
+    svg {
+        background: linear-gradient(#114fe2, #11a7e2);
+        width: min(1400px, 100%);
         position: absolute;
-        background: coral;
-        border-radius: 50%;
-        aspect-ratio: 1;
+        inset: 0;
+        margin: auto;
+        z-index: -1;
+
+        box-shadow: 0px 0px 50px 10px #0005;
+        border-radius: 10px;
     }
 </style>

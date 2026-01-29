@@ -21,7 +21,7 @@ const BLOCK_SIZE: usize = 128;
 
 /// Our FT is computed across this many samples
 /// *effectively* controls what the time-range is for the FT
-const SAMPLES_SIZE: usize = 4096;
+const SAMPLES_SIZE: usize = 2048;
 
 /// How many bands we want in our output spectrum
 const BANDS_COUNT: usize = 70;
@@ -124,7 +124,7 @@ pub extern "C" fn process_samples() {
 
 fn get_spectrum_bands() -> Vec<(usize, usize)> {
     // Calculate frequency bands from the sample rate n stuff
-    let min_freq = 70.0; //20.0;
+    let min_freq = 85.0; //20.0;
     let sample_rate = SAMPLE_RATE.get() as f32;
     let max_freq = 1200.0_f32; // sample_rate / 2.0;
     let spectrum_bins = (0..=BANDS_COUNT).map(|i| {
