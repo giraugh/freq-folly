@@ -108,6 +108,13 @@
 
     /** Describe the state of a single ball for now. Its positions are in px space ig */
     let ball = $state({ x: 700, y: -50, vx: 0, vy: 0, r: 30 });
+    let goal = $state<{
+        x: number;
+        y: number;
+        r: number;
+        disabledAt: null | number;
+    }>({ x: 700, y: 500, r: 350, disabledAt: null });
+    let score = $state(0);
 
     function loop() {
         update();
@@ -122,6 +129,25 @@
 
         ball.x += ball.vx;
         ball.y += ball.vy;
+
+        // Is the ball in the goal?
+        if (goal.disabledAt === null) {
+            const goalXd = goal.x - ball.x;
+            const goalYd = goal.y - ball.y;
+            const goalD = Math.sqrt(goalXd * goalXd + goalYd * goalYd);
+            if (goalD < Math.max(ball.r, goal.r)) {
+                goal.r = Math.max(50, goal.r - 10);
+                goal.x = Math.random() * canvasWidth;
+                goal.y = 300 + 400 * Math.random();
+                goal.disabledAt = Date.now();
+                score += 1;
+            }
+        } else {
+            const duration = Date.now() - goal.disabledAt;
+            if (duration > 1_000) {
+                goal.disabledAt = null;
+            }
+        }
 
         // Bounce of edges
         if (ball.x < 0) {
@@ -149,7 +175,6 @@
         if (activeSegment) {
             const s = activeSegment;
             const t = (ball.x - s.x1) / (s.x2 - s.x1);
-            console.log(t);
             const surfaceY = lerp(s.y1, s.y2, t);
             if (ball.y > surfaceY) {
                 // Apply bouyancy
@@ -180,8 +205,22 @@
     </button>
 {/if}
 
+{#if score > 0}
+    <h3>{score}</h3>
+{/if}
+
 <svg bind:this={svgEl} viewBox="0 0 {canvasWidth} {canvasHeight}">
     <circle cx={ball.x} cy={ball.y} r={ball.r} fill="coral" stroke="none" />
+    <circle
+        class="goal"
+        class:disabled={goal.disabledAt !== null}
+        cx={goal.x}
+        cy={goal.y}
+        r={goal.r}
+        stroke="white"
+        stroke-width="4"
+        fill="#ffffff7a"
+    />
     <path
         d={pathData}
         stroke="white"
@@ -232,5 +271,32 @@
 
         box-shadow: 0px 0px 50px 10px #0005;
         border-radius: 10px;
+    }
+
+    .goal {
+        animation: pulse infinite linear 2s;
+        transform-origin: center;
+
+        &.disabled {
+            opacity: 0.1;
+        }
+    }
+
+    @keyframes pulse {
+        from {
+            scale: 1;
+        }
+        50% {
+            scale: 0.98;
+        }
+        to {
+            scale: 1;
+        }
+    }
+
+    h3 {
+        font-family: sans-serif;
+        color: white;
+        font-size: 3rem;
     }
 </style>

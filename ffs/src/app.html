@@ -9,10 +9,19 @@
             body {
                 margin: 0;
                 padding: 0;
+                display: flex;
+                width: 100%;
+            }
+
+            .content {
+                display: flex !important;
+                align-items: center;
+                width: 100%;
+                justify-content: center;
             }
         </style>
     </head>
     <body data-sveltekit-preload-data="hover">
-        <div style="display: contents">%sveltekit.body%</div>
+        <div class="content">%sveltekit.body%</div>
     </body>
 </html>
