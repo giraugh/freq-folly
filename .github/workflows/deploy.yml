@@ -24,7 +24,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffaa_wasm
-          path: ffaa/target/wasm32-unknown-unknown/release/ffaa/wasm
+          path: ffaa/target/wasm32-unknown-unknown/release/ffaa.wasm
 
   build_site:
     runs-on: ubuntu-latest
