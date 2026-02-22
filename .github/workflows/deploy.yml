@@ -43,6 +43,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: ./ffs/pnpm-lock.yaml
 
       - name: Install dependencies
         working-directory: ffs 
