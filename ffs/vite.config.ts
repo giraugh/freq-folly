@@ -5,7 +5,7 @@ import wasm from "vite-plugin-wasm";
 export default defineConfig({
     plugins: [sveltekit(), wasm()],
     server: {
-        proxy: {
+        proxy: import.meta.env.PROD ? undefined : {
             "/ffaa.wasm": {
                 // Depends on web server running in other dir for now..
                 // I'll make some kind of nice build command later..
