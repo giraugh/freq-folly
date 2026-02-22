@@ -26,7 +26,7 @@
         source.connect(node);
 
         // We compile the WASM here but do not instantiate
-        const wasmBytes = await (await fetch("/ffaa.wasm")).arrayBuffer();
+        const wasmBytes = await (await fetch("ffaa.wasm")).arrayBuffer();
         const wasmModule = await WebAssembly.compile(wasmBytes);
         node.port.postMessage({ type: "wasm", module: wasmModule });
 
