@@ -2,10 +2,10 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     plugins: [sveltekit(), wasm()],
     server: {
-        proxy: import.meta.env.PROD ? undefined : {
+        proxy: mode !== 'development' ? undefined : {
             "/ffaa.wasm": {
                 // Depends on web server running in other dir for now..
                 // I'll make some kind of nice build command later..
@@ -13,4 +13,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));
