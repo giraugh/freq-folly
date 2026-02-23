@@ -16,8 +16,9 @@ class WasmAudioProcessor extends AudioWorkletProcessor {
             }
 
             if (e.data.type === "wasm") {
-                // Instantiate the module
-                this.wasm = await WebAssembly.instantiate(e.data.module, {
+                // Compile & Instantiate the module
+                const wasmModule = await WebAssembly.compile(e.data.wasmBytes);
+                this.wasm = await WebAssembly.instantiate(wasmModule, {
                     env: {
                         memory: new WebAssembly.Memory({ initial: 1024 }),
                     },

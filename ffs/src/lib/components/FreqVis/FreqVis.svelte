@@ -25,10 +25,13 @@
         node.port.postMessage({ type: "sampleRate", rate: ctx.sampleRate });
         source.connect(node);
 
-        // We compile the WASM here but do not instantiate
+        // We just fetch the wasm bytes here but we do not compile or instantiate
+        // On firefox its possible to compile then send the module
+        // but on chrome the module is then tied to this thread
         const wasmBytes = await (await fetch("ffaa.wasm")).arrayBuffer();
-        const wasmModule = await WebAssembly.compile(wasmBytes);
-        node.port.postMessage({ type: "wasm", module: wasmModule });
+        node.port.postMessage({ type: "wasm", wasmBytes: wasmBytes }, [
+            wasmBytes,
+        ]);
 
         // Listen for frequency spectrum updates
         node.port.onmessage = (e) => {
